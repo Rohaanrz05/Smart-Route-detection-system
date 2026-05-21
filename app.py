@@ -21,16 +21,17 @@ st.markdown("""
 
 .main-title {
     text-align: center;
-    font-size: 45px;
-    font-weight: 800;
+    font-size: 46px;
+    font-weight: 900;
     color: #38bdf8;
+    margin-bottom: 5px;
 }
 
 .sub-title {
     text-align: center;
     font-size: 18px;
     color: #cbd5e1;
-    margin-bottom: 25px;
+    margin-bottom: 30px;
 }
 
 .card {
@@ -39,31 +40,53 @@ st.markdown("""
     border-radius: 18px;
     border: 1px solid #334155;
     box-shadow: 0px 4px 20px rgba(0,0,0,0.25);
-    margin-bottom: 15px;
+    margin-bottom: 18px;
 }
 
-.metric-card {
+.route-box {
     background: #020617;
-    padding: 18px;
-    border-radius: 16px;
-    border-left: 5px solid #38bdf8;
-    text-align: center;
-}
-
-.result-box {
-    background: #020617;
-    padding: 18px;
-    border-radius: 16px;
-    border-left: 5px solid #22c55e;
+    padding: 20px;
+    border-radius: 18px;
+    border-left: 6px solid #22c55e;
     margin-bottom: 15px;
 }
 
 .warning-box {
     background: #020617;
+    padding: 20px;
+    border-radius: 18px;
+    border-left: 6px solid #f97316;
+    margin-bottom: 15px;
+}
+
+.info-box {
+    background: #0f172a;
     padding: 18px;
     border-radius: 16px;
-    border-left: 5px solid #f97316;
-    margin-bottom: 15px;
+    border-left: 5px solid #38bdf8;
+    margin-bottom: 20px;
+}
+
+div[data-testid="metric-container"] {
+    background-color: #020617;
+    border: 1px solid #334155;
+    padding: 18px;
+    border-radius: 16px;
+    box-shadow: 0px 4px 15px rgba(0,0,0,0.25);
+}
+
+.stButton > button {
+    background: linear-gradient(90deg, #0284c7, #22c55e);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-weight: 700;
+    height: 48px;
+}
+
+.stButton > button:hover {
+    background: linear-gradient(90deg, #0369a1, #16a34a);
+    color: white;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -74,50 +97,50 @@ st.markdown(
 )
 
 st.markdown(
-    '<div class="sub-title">Using BFS, DFS, A* Search, and Hill Climbing</div>',
+    '<div class="sub-title">Professional Route Finder using BFS, DFS, A* Search and Hill Climbing</div>',
     unsafe_allow_html=True
 )
 
 locations = {
     "Home": {
         "coord": (33.6844, 73.0479),
-        "desc": "Starting residential area"
+        "desc": "Residential Area"
     },
     "Market": {
         "coord": (33.6902, 73.0551),
-        "desc": "Busy commercial market"
+        "desc": "Commercial Market"
     },
     "School": {
         "coord": (33.6789, 73.0606),
-        "desc": "Educational area"
+        "desc": "Educational Area"
     },
     "Hospital": {
         "coord": (33.6995, 73.0363),
-        "desc": "Emergency medical facility"
+        "desc": "Medical Facility"
     },
     "Mall": {
         "coord": (33.7077, 73.0498),
-        "desc": "Shopping mall"
+        "desc": "Shopping Area"
     },
     "Park": {
         "coord": (33.6938, 73.0752),
-        "desc": "Public park"
+        "desc": "Public Park"
     },
     "University": {
         "coord": (33.7170, 73.0712),
-        "desc": "University campus"
+        "desc": "University Campus"
     },
     "Bus Stop": {
         "coord": (33.6721, 73.0448),
-        "desc": "Public transport stop"
+        "desc": "Transport Stop"
     },
     "Airport": {
         "coord": (33.6167, 73.0992),
-        "desc": "Airport route"
+        "desc": "Airport Route"
     },
     "Office": {
         "coord": (33.7294, 73.0931),
-        "desc": "Office destination area"
+        "desc": "Office Area"
     }
 }
 
@@ -179,10 +202,26 @@ graph = {
 }
 
 
-def haversine_distance(node1, node2):
-    lat1, lon1 = locations[node1]["coord"]
-    lat2, lon2 = locations[node2]["coord"]
+if "start_location" not in st.session_state:
+    st.session_state.start_location = "Home"
 
+if "destination_location" not in st.session_state:
+    st.session_state.destination_location = "Office"
+
+if "priority" not in st.session_state:
+    st.session_state.priority = "Shortest Distance"
+
+if "paths" not in st.session_state:
+    st.session_state.paths = {}
+
+if "comparison_df" not in st.session_state:
+    st.session_state.comparison_df = pd.DataFrame()
+
+if "best_algorithm" not in st.session_state:
+    st.session_state.best_algorithm = None
+
+
+def distance_between_coords(lat1, lon1, lat2, lon2):
     radius = 6371
 
     dlat = math.radians(lat2 - lat1)
@@ -197,6 +236,27 @@ def haversine_distance(node1, node2):
 
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return radius * c
+
+
+def haversine_distance(node1, node2):
+    lat1, lon1 = locations[node1]["coord"]
+    lat2, lon2 = locations[node2]["coord"]
+    return distance_between_coords(lat1, lon1, lat2, lon2)
+
+
+def nearest_location_from_click(lat, lon):
+    nearest_node = None
+    nearest_distance = float("inf")
+
+    for node, data in locations.items():
+        node_lat, node_lon = data["coord"]
+        dist = distance_between_coords(lat, lon, node_lat, node_lon)
+
+        if dist < nearest_distance:
+            nearest_distance = dist
+            nearest_node = node
+
+    return nearest_node
 
 
 def heuristic(node, goal):
@@ -261,8 +321,7 @@ def bfs(start, goal):
             visited.add(node)
 
             for neighbor, distance, traffic in graph[node]:
-                new_path = path + [neighbor]
-                queue.append(new_path)
+                queue.append(path + [neighbor])
 
     return None
 
@@ -282,8 +341,7 @@ def dfs(start, goal):
             visited.add(node)
 
             for neighbor, distance, traffic in graph[node]:
-                new_path = path + [neighbor]
-                stack.append(new_path)
+                stack.append(path + [neighbor])
 
     return None
 
@@ -333,9 +391,7 @@ def hill_climbing(start, goal, priority):
             return path
 
         neighbors.sort()
-        best_neighbor = neighbors[0][1]
-
-        current = best_neighbor
+        current = neighbors[0][1]
         path.append(current)
 
         if len(path) > len(graph):
@@ -344,7 +400,7 @@ def hill_climbing(start, goal, priority):
     return path
 
 
-def create_map(path=None, algorithm_name="Route Map"):
+def create_route_map(path=None, algorithm_name="Route Map"):
     center_lat = sum(locations[node]["coord"][0] for node in locations) / len(locations)
     center_lon = sum(locations[node]["coord"][1] for node in locations) / len(locations)
 
@@ -380,41 +436,99 @@ def create_map(path=None, algorithm_name="Route Map"):
         folium.PolyLine(
             locations=route_points,
             color="#22c55e",
-            weight=7,
+            weight=8,
             opacity=1,
             tooltip=algorithm_name
         ).add_to(route_map)
+
+    start = st.session_state.start_location
+    destination = st.session_state.destination_location
 
     for node, data in locations.items():
         coord = data["coord"]
 
         color = "blue"
+        icon = "map-marker"
 
         if path and node in path:
             color = "green"
 
-        if path and node == path[0]:
+        if node == start:
             color = "orange"
+            icon = "home"
 
-        if path and node == path[-1]:
+        if node == destination:
             color = "red"
+            icon = "flag"
 
         folium.Marker(
             location=coord,
             popup=f"""
             <b>{node}</b><br>
             {data['desc']}<br>
-            Latitude: {coord[0]}<br>
-            Longitude: {coord[1]}
+            Click marker to select from map.
             """,
             tooltip=node,
-            icon=folium.Icon(color=color, icon="map-marker")
+            icon=folium.Icon(color=color, icon=icon, prefix="fa")
         ).add_to(route_map)
 
     return route_map
 
 
-def show_algorithm_result(name, path, goal):
+def run_all_algorithms(start, goal, priority):
+    paths = {
+        "BFS": bfs(start, goal),
+        "DFS": dfs(start, goal),
+        "A* Search": astar(start, goal, priority),
+        "Hill Climbing": hill_climbing(start, goal, priority)
+    }
+
+    results = []
+
+    for algorithm, path in paths.items():
+        if path:
+            distance, traffic, estimated_time, cost = calculate_path_details(path)
+            reached = "Yes" if path[-1] == goal else "No"
+
+            results.append({
+                "Algorithm": algorithm,
+                "Route": " → ".join(path),
+                "Distance km": distance,
+                "Traffic Score": traffic,
+                "Estimated Time min": estimated_time,
+                "Total Cost": cost,
+                "Reached Goal": reached
+            })
+
+    df = pd.DataFrame(results)
+    best_algorithm = None
+
+    valid_df = df[df["Reached Goal"] == "Yes"].copy()
+
+    if not valid_df.empty:
+        if priority == "Shortest Distance":
+            best = valid_df.loc[valid_df["Distance km"].idxmin()]
+
+        elif priority == "Least Traffic":
+            best = valid_df.loc[valid_df["Traffic Score"].idxmin()]
+
+        elif priority == "Fastest Time":
+            best = valid_df.loc[valid_df["Estimated Time min"].idxmin()]
+
+        else:
+            valid_df["Final Score"] = (
+                valid_df["Distance km"]
+                + valid_df["Traffic Score"]
+                + valid_df["Estimated Time min"] / 10
+            )
+            best = valid_df.loc[valid_df["Final Score"].idxmin()]
+
+        best_algorithm = best["Algorithm"]
+
+    return paths, df, best_algorithm
+
+
+def show_route_result(name, path, goal):
     if not path:
         st.error("No path found.")
         return
@@ -423,12 +537,11 @@ def show_algorithm_result(name, path, goal):
     reached = path[-1] == goal
 
     if reached:
-        st.markdown('<div class="result-box">', unsafe_allow_html=True)
+        st.markdown('<div class="route-box">', unsafe_allow_html=True)
     else:
         st.markdown('<div class="warning-box">', unsafe_allow_html=True)
 
     st.subheader(name)
-
     st.write("**Route:**", " → ".join(path))
     st.write("**Total Distance:**", distance, "km")
     st.write("**Traffic Score:**", traffic)
@@ -442,22 +555,27 @@ def show_algorithm_result(name, path, goal):
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st_folium(create_map(path, name), width=1200, height=520)
+    st_folium(
+        create_route_map(path, name),
+        width=1200,
+        height=520,
+        key=f"map_{name}"
+    )
 
 
 with st.sidebar:
     st.title("⚙️ Route Settings")
 
-    start = st.selectbox(
-        "Select Starting Location",
+    start_location = st.selectbox(
+        "Select Current Location",
         list(graph.keys()),
-        index=0
+        key="start_location"
     )
 
-    goal = st.selectbox(
+    destination_location = st.selectbox(
         "Select Destination",
         list(graph.keys()),
-        index=list(graph.keys()).index("Office")
+        key="destination_location"
     )
 
     priority = st.selectbox(
@@ -467,10 +585,21 @@ with st.sidebar:
             "Least Traffic",
             "Fastest Time",
             "Balanced Route"
+        ],
+        key="priority"
+    )
+
+    click_mode = st.radio(
+        "Map Click Mode",
+        [
+            "Set clicked place as Current Location",
+            "Set clicked place as Destination"
         ]
     )
 
-    run_button = st.button("Find Best Route", use_container_width=True)
+    auto_calculate = st.checkbox("Auto Calculate Route", value=True)
+
+    calculate_button = st.button("Find Best Route", use_container_width=True)
 
     st.markdown("---")
     st.write("### Algorithms Used")
@@ -480,122 +609,158 @@ with st.sidebar:
     st.write("✅ Hill Climbing")
 
 
+start = st.session_state.start_location
+goal = st.session_state.destination_location
+priority = st.session_state.priority
+
+if start != goal and (auto_calculate or calculate_button):
+    paths, comparison_df, best_algorithm = run_all_algorithms(start, goal, priority)
+
+    st.session_state.paths = paths
+    st.session_state.comparison_df = comparison_df
+    st.session_state.best_algorithm = best_algorithm
+
 st.markdown("""
 <div class="card">
 <h3>Project Overview</h3>
 <p>
-This project is an AI-based intelligent system that finds the best route between two locations.
-It uses multiple Artificial Intelligence algorithms including BFS, DFS, A* Search, and Hill Climbing.
-The system compares routes based on distance, traffic, estimated time, and total cost.
+This intelligent system finds the best route between two locations using Artificial Intelligence algorithms.
+The user can select current location and destination from the sidebar or directly from the interactive map.
+The system compares BFS, DFS, A* Search, and Hill Climbing based on distance, traffic, estimated time, and total cost.
 </p>
 </div>
 """, unsafe_allow_html=True)
 
-
 if start == goal:
-    st.warning("Start and destination cannot be the same.")
+    st.warning("Current location and destination cannot be the same.")
 
-elif run_button:
-    bfs_path = bfs(start, goal)
-    dfs_path = dfs(start, goal)
-    astar_path = astar(start, goal, priority)
-    hill_path = hill_climbing(start, goal, priority)
+paths = st.session_state.paths
+comparison_df = st.session_state.comparison_df
+best_algorithm = st.session_state.best_algorithm
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "Full Map",
-        "BFS",
-        "DFS",
-        "A* Search",
-        "Hill Climbing",
-        "Comparison"
-    ])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "🗺️ Select on Map",
+    "🔎 BFS",
+    "🌲 DFS",
+    "⭐ A* Search",
+    "⛰️ Hill Climbing",
+    "📊 Comparison"
+])
 
-    with tab1:
-        st.subheader("Complete City Route Map")
-        st_folium(create_map(), width=1200, height=550)
+with tab1:
+    st.subheader("Interactive Map Selection")
 
-    with tab2:
-        show_algorithm_result("Breadth First Search", bfs_path, goal)
+    st.markdown("""
+    <div class="info-box">
+    Click any marker on the map. It will automatically become your current location or destination based on the selected Map Click Mode in the sidebar.
+    </div>
+    """, unsafe_allow_html=True)
 
-    with tab3:
-        show_algorithm_result("Depth First Search", dfs_path, goal)
+    selected_path = None
 
-    with tab4:
-        show_algorithm_result("A* Search", astar_path, goal)
+    if best_algorithm and best_algorithm in paths:
+        selected_path = paths[best_algorithm]
 
-    with tab5:
-        show_algorithm_result("Hill Climbing", hill_path, goal)
+    map_data = st_folium(
+        create_route_map(selected_path, "Best Route"),
+        width=1200,
+        height=560,
+        key="selection_map"
+    )
 
-    with tab6:
-        results = []
+    clicked_node = None
 
-        algorithms = {
-            "BFS": bfs_path,
-            "DFS": dfs_path,
-            "A* Search": astar_path,
-            "Hill Climbing": hill_path
-        }
+    if map_data:
+        tooltip = map_data.get("last_object_clicked_tooltip")
 
-        for algorithm, path in algorithms.items():
-            if path:
-                distance, traffic, estimated_time, cost = calculate_path_details(path)
-                reached = "Yes" if path[-1] == goal else "No"
+        if tooltip in locations:
+            clicked_node = tooltip
 
-                results.append({
-                    "Algorithm": algorithm,
-                    "Route": " → ".join(path),
-                    "Distance km": distance,
-                    "Traffic Score": traffic,
-                    "Estimated Time min": estimated_time,
-                    "Total Cost": cost,
-                    "Reached Goal": reached
-                })
+        elif map_data.get("last_clicked"):
+            lat = map_data["last_clicked"]["lat"]
+            lon = map_data["last_clicked"]["lng"]
+            clicked_node = nearest_location_from_click(lat, lon)
 
-        df = pd.DataFrame(results)
+    if clicked_node:
+        if click_mode == "Set clicked place as Current Location":
+            if st.session_state.start_location != clicked_node:
+                st.session_state.start_location = clicked_node
+                st.rerun()
 
-        st.subheader("Algorithm Comparison Table")
-        st.dataframe(df, use_container_width=True)
+        else:
+            if st.session_state.destination_location != clicked_node:
+                st.session_state.destination_location = clicked_node
+                st.rerun()
 
-        valid_df = df[df["Reached Goal"] == "Yes"].copy()
+with tab2:
+    if "BFS" in paths:
+        show_route_result("Breadth First Search Result", paths["BFS"], goal)
+    else:
+        st.info("Select route settings and click Find Best Route.")
 
-        if not valid_df.empty:
-            if priority == "Shortest Distance":
-                best = valid_df.loc[valid_df["Distance km"].idxmin()]
+with tab3:
+    if "DFS" in paths:
+        show_route_result("Depth First Search Result", paths["DFS"], goal)
+    else:
+        st.info("Select route settings and click Find Best Route.")
 
-            elif priority == "Least Traffic":
-                best = valid_df.loc[valid_df["Traffic Score"].idxmin()]
+with tab4:
+    if "A* Search" in paths:
+        show_route_result("A* Search Result", paths["A* Search"], goal)
+    else:
+        st.info("Select route settings and click Find Best Route.")
 
-            elif priority == "Fastest Time":
-                best = valid_df.loc[valid_df["Estimated Time min"].idxmin()]
+with tab5:
+    if "Hill Climbing" in paths:
+        show_route_result("Hill Climbing Result", paths["Hill Climbing"], goal)
+    else:
+        st.info("Select route settings and click Find Best Route.")
 
-            else:
-                valid_df["Final Score"] = (
-                    valid_df["Distance km"]
-                    + valid_df["Traffic Score"]
-                    + valid_df["Estimated Time min"] / 10
-                )
-                best = valid_df.loc[valid_df["Final Score"].idxmin()]
+with tab6:
+    st.subheader("Algorithm Comparison")
+
+    if not comparison_df.empty:
+        st.dataframe(comparison_df, use_container_width=True)
+
+        valid_df = comparison_df[comparison_df["Reached Goal"] == "Yes"].copy()
+
+        if best_algorithm and not valid_df.empty:
+            best_row = valid_df[valid_df["Algorithm"] == best_algorithm].iloc[0]
 
             col1, col2, col3, col4 = st.columns(4)
 
             with col1:
-                st.metric("Best Algorithm", best["Algorithm"])
+                st.metric("Best Algorithm", best_row["Algorithm"])
 
             with col2:
-                st.metric("Distance", f"{best['Distance km']} km")
+                st.metric("Distance", f"{best_row['Distance km']} km")
 
             with col3:
-                st.metric("Traffic", best["Traffic Score"])
+                st.metric("Traffic", best_row["Traffic Score"])
 
             with col4:
-                st.metric("Time", f"{best['Estimated Time min']} min")
+                st.metric("Time", f"{best_row['Estimated Time min']} min")
 
-            st.success(f"Best Route: {best['Route']}")
+            st.success(f"Best Route: {best_row['Route']}")
 
-            st.subheader("Best Route Map")
-            best_path = algorithms[best["Algorithm"]]
-            st_folium(create_map(best_path, "Best Route"), width=1200, height=550)
+            chart_df = comparison_df.set_index("Algorithm")
 
-else:
-    st.info("Select start location, destination, and priority from the sidebar. Then click Find Best Route.")
-    st_folium(create_map(), width=1200, height=550)
+            st.markdown("### Distance Comparison")
+            st.bar_chart(chart_df[["Distance km"]])
+
+            st.markdown("### Traffic Comparison")
+            st.bar_chart(chart_df[["Traffic Score"]])
+
+            st.markdown("### Estimated Time Comparison")
+            st.bar_chart(chart_df[["Estimated Time min"]])
+
+            st.markdown("### Best Route Map")
+            st_folium(
+                create_route_map(paths[best_algorithm], "Best Route"),
+                width=1200,
+                height=550,
+                key="best_route_map"
+            )
+
+    else:
+        st.info("Select route settings and click Find Best Route.")
