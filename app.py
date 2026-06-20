@@ -701,13 +701,14 @@ with tab1:
 
     if clicked_node:
         if click_mode == "Set clicked place as Current Location":
-            if st.session_state.start_location != clicked_node:
-                st.session_state.start_location = clicked_node
-                st.rerun()
+            st.session_state["start_location"] = clicked_node
+            st.query_params["refresh"] = random.randint(1,100000)
+            st.rerun()
+    
         else:
-            if st.session_state.destination_location != clicked_node:
-                st.session_state.destination_location = clicked_node
-                st.rerun()
+            st.session_state["destination_location"] = clicked_node
+            st.query_params["refresh"] = random.randint(1,100000)
+            st.rerun()
 
 with tab2:
     st.subheader("Dynamic Traffic Generated for This Run")
